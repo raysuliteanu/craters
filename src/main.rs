@@ -113,13 +113,11 @@ impl App {
     }
 
     fn create_layout(&self, area: Rect) -> [[Rect; 3]; 2] {
-        // Split the frame into 2 vertical rows (50% each)
         let rows = Layout::default()
             .direction(ratatui::layout::Direction::Vertical)
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(area);
 
-        // Split the first row into 3 horizontal columns
         let row1 = Layout::default()
             .direction(ratatui::layout::Direction::Horizontal)
             .constraints([
@@ -129,7 +127,6 @@ impl App {
             ])
             .split(rows[0]);
 
-        // Split the second row into 3 horizontal columns
         let row2 = Layout::default()
             .direction(ratatui::layout::Direction::Horizontal)
             .constraints([
@@ -139,7 +136,6 @@ impl App {
             ])
             .split(rows[1]);
 
-        // Return as a 2x3 array
         [[row1[0], row1[1], row1[2]], [row2[0], row2[1], row2[2]]]
     }
 
