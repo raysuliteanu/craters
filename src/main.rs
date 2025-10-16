@@ -1,6 +1,8 @@
-use color_eyre::Result;
+use anyhow::Result;
+use log::debug;
 use ratatui::widgets::ListState;
-use std::{collections::HashMap, io};
+use simplelog::{Config, LevelFilter, WriteLogger};
+use std::{collections::HashMap, fs::File, io};
 
 #[allow(unused_imports)]
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
@@ -15,16 +17,17 @@ use ratatui::{
     widgets::{Block, Paragraph, Widget, Wrap},
 };
 use strum::FromRepr;
-use strum::{Display, EnumIter};
+use strum::{Display, EnumIter, IntoEnumIterator};
 
 use crate::http_client::CrateInfo;
 
-#[derive(Default, Debug, Copy, Clone, Display, FromRepr, EnumIter, PartialEq, Eq)]
+// NOTE: order matters in this list for proper next/previous navigation
+#[derive(Default, Debug, Copy, Clone, Display, FromRepr, EnumIter, PartialEq, Eq, Hash)]
 enum SelectedSection {
     #[default]
     NewCrates,
-    MostDownloaded,
     JustUpdated,
+    MostDownloaded,
     RecentDownloads,
     Keywords,
     Categories,
@@ -154,32 +157,56 @@ impl App {
     }
 
     fn create_new_crates_area(&self) -> Block<'static> {
-        self.create_block("New Crates")
+        self.create_block(
+            "New Crates",
+            self.current_section == SelectedSection::NewCrates,
+        )
     }
 
     fn create_just_updated_area(&self) -> Block<'static> {
-        self.create_block("Just Updated")
+        self.create_block(
+            "Just Updated",
+            self.current_section == SelectedSection::JustUpdated,
+        )
     }
 
     fn create_most_downloaded(&self) -> Block<'static> {
-        self.create_block("Most Downloaded")
+        self.create_block(
+            "Most Downloaded",
+            self.current_section == SelectedSection::MostDownloaded,
+        )
     }
 
     fn create_recent_downloads(&self) -> Block<'static> {
-        self.create_block("Most Recent Downloads")
+        self.create_block(
+            "Most Recent Downloads",
+            self.current_section == SelectedSection::RecentDownloads,
+        )
     }
 
     fn create_popular_keywords(&self) -> Block<'static> {
-        self.create_block("Popular Keywords")
+        self.create_block(
+            "Popular Keywords",
+            self.current_section == SelectedSection::Keywords,
+        )
     }
 
     fn create_popular_categories(&self) -> Block<'static> {
-        self.create_block("Popular Categories")
+        self.create_block(
+            "Popular Categories",
+            self.current_section == SelectedSection::Categories,
+        )
     }
 
-    fn create_block(&self, title: &'static str) -> Block<'static> {
+    fn create_block(&self, title: &'static str, selected: bool) -> Block<'static> {
         let title = Line::from(title.bold().blue()).left_aligned();
-        Block::bordered().title(title).border_set(border::EMPTY)
+        let border = if selected {
+            border::PLAIN
+        } else {
+            border::EMPTY
+        };
+
+        Block::bordered().title(title).border_set(border)
     }
 
     fn placeholder_paragraph(&self) -> Paragraph<'static> {
@@ -212,10 +239,10 @@ impl App {
             KeyCode::Char('s') => self.query(),
             KeyCode::Char('i') => self.info(),
             KeyCode::Char('q') | KeyCode::Esc => self.exit(),
-            // KeyCode::Char('l') | KeyCode::Right => self.next(),
-            // KeyCode::Char('h') | KeyCode::Left => self.previous(),
-            // KeyCode::Char('j') | KeyCode::Down => self.down(),
-            // KeyCode::Char('k') | KeyCode::Up => self.up(),
+            KeyCode::Char('l') | KeyCode::Right | KeyCode::Tab => self.next_section(),
+            KeyCode::Char('h') | KeyCode::Left | KeyCode::BackTab => self.previous_section(),
+            KeyCode::Char('j') | KeyCode::Down => self.select_next(),
+            KeyCode::Char('k') | KeyCode::Up => self.select_previous(),
             _ => {}
         }
     }
@@ -224,13 +251,68 @@ impl App {
         self.exit = true;
     }
 
+    fn select_next(&mut self) {
+        debug!("current_section: {}", self.current_section);
+        self.state
+            .get_mut(&self.current_section)
+            .expect("should always have a section selected")
+            .state
+            .select_next();
+    }
+
+    fn select_previous(&mut self) {
+        debug!("current_section: {}", self.current_section);
+        self.state
+            .get_mut(&self.current_section)
+            .expect("should always have a section selected")
+            .state
+            .select_previous();
+    }
+
+    fn select_none(&mut self) {
+        self.state
+            .get_mut(&self.current_section)
+            .expect("should always have a section selected")
+            .state
+            .select(None);
+    }
+
+    fn select_first(&mut self) {
+        self.state
+            .get_mut(&self.current_section)
+            .expect("should always have a section selected")
+            .state
+            .select_first();
+    }
+
+    fn next_section(&mut self) {
+        let mut next = self.current_section as usize + 1;
+        if next >= SelectedSection::iter().count() {
+            next = 0;
+        }
+        self.current_section = SelectedSection::from_repr(next).unwrap_or_default();
+    }
+
+    fn previous_section(&mut self) {
+        let mut previous = self.current_section as usize;
+        if self.current_section as isize - 1 < 0 {
+            previous = SelectedSection::iter().count() - 1;
+        }
+        self.current_section = SelectedSection::from_repr(previous).unwrap_or_default();
+    }
+
     fn info(&mut self) {}
 
     fn query(&mut self) {}
 }
 
 fn main() -> Result<()> {
-    color_eyre::install()?;
+    WriteLogger::init(
+        LevelFilter::Debug,
+        Config::default(),
+        File::create("craters.log").unwrap(),
+    )
+    .unwrap();
     let mut terminal = ratatui::init();
     let app_result = App::default().run(&mut terminal);
     ratatui::restore();
