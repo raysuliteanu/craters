@@ -27,8 +27,11 @@ enum SelectedSection {
     Categories,
 }
 
-#[derive(Debug, Default)]
+mod http_client;
+
+#[derive(Default)]
 pub struct App {
+    client: http_client::HttpClient,
     current_section: SelectedSection,
     exit: bool,
 }
@@ -49,7 +52,7 @@ impl App {
 
         frame.render_widget(title_block, frame.area());
 
-        let layout = self.create_layout(inner_area);
+        let [row1, row2] = self.create_layout(inner_area);
 
         let new_crates_title = Line::from(" New Crates ".bold());
         let new_crates_block = Block::bordered()
@@ -57,8 +60,8 @@ impl App {
             .border_set(border::EMPTY);
 
         frame.render_widget(
-            App::placeholder_paragraph().block(new_crates_block),
-            layout[0][0],
+            self.placeholder_paragraph().block(new_crates_block),
+            row1[0],
         );
 
         let just_updated_title = Line::from(" Just Updated ".bold());
@@ -67,8 +70,8 @@ impl App {
             .border_set(border::EMPTY);
 
         frame.render_widget(
-            App::placeholder_paragraph().block(just_updated_block),
-            layout[0][1],
+            self.placeholder_paragraph().block(just_updated_block),
+            row1[1],
         );
 
         let most_downloaded_title = Line::from(" Most Downloaded ".bold());
@@ -77,8 +80,8 @@ impl App {
             .border_set(border::EMPTY);
 
         frame.render_widget(
-            App::placeholder_paragraph().block(most_downloaded_block),
-            layout[0][2],
+            self.placeholder_paragraph().block(most_downloaded_block),
+            row1[2],
         );
 
         let recent_downloads_title = Line::from(" Most Recent Downloads ".bold());
@@ -87,8 +90,8 @@ impl App {
             .border_set(border::EMPTY);
 
         frame.render_widget(
-            App::placeholder_paragraph().block(recent_downloads_block),
-            layout[1][0],
+            self.placeholder_paragraph().block(recent_downloads_block),
+            row2[0],
         );
 
         let keyword_title = Line::from(" Popular Keywords ".bold());
@@ -96,10 +99,7 @@ impl App {
             .title(keyword_title.centered())
             .border_set(border::EMPTY);
 
-        frame.render_widget(
-            App::placeholder_paragraph().block(keyword_block),
-            layout[1][1],
-        );
+        frame.render_widget(self.placeholder_paragraph().block(keyword_block), row2[1]);
 
         let categories_title = Line::from(" Popular Categories ".bold());
         let categories_block = Block::bordered()
@@ -107,8 +107,8 @@ impl App {
             .border_set(border::EMPTY);
 
         frame.render_widget(
-            App::placeholder_paragraph().block(categories_block),
-            layout[1][2],
+            self.placeholder_paragraph().block(categories_block),
+            row2[2],
         );
     }
 
@@ -157,9 +157,16 @@ impl App {
             .border_set(border::THICK)
     }
 
-    fn placeholder_paragraph() -> Paragraph<'static> {
-        let text = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";
-        Paragraph::new(text.dark_gray()).wrap(Wrap { trim: true })
+    fn placeholder_paragraph(&self) -> Paragraph<'static> {
+        let crate_info = self
+            .client
+            .fetch_new_crates()
+            .expect("failed to fetch from crates.io");
+        let text = crate_info
+            .iter()
+            .map(|c| Line::from(c.name.clone()))
+            .collect::<Vec<Line>>();
+        Paragraph::new(text)
     }
 
     /// updates the application's state based on user input
