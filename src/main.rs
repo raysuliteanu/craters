@@ -1,5 +1,6 @@
 use color_eyre::Result;
-use std::io;
+use ratatui::widgets::ListState;
+use std::{collections::HashMap, io};
 
 #[allow(unused_imports)]
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
@@ -16,6 +17,8 @@ use ratatui::{
 use strum::FromRepr;
 use strum::{Display, EnumIter};
 
+use crate::http_client::CrateInfo;
+
 #[derive(Default, Debug, Copy, Clone, Display, FromRepr, EnumIter, PartialEq, Eq)]
 enum SelectedSection {
     #[default]
@@ -29,11 +32,22 @@ enum SelectedSection {
 
 mod http_client;
 
+#[allow(dead_code)]
 #[derive(Default)]
 pub struct App {
     client: http_client::HttpClient,
     current_section: SelectedSection,
+    state: HashMap<SelectedSection, CrateList>,
     exit: bool,
+    search: bool,
+    info: bool,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Default)]
+struct CrateList {
+    crates: Vec<CrateInfo>,
+    state: ListState,
 }
 
 impl App {
@@ -47,64 +61,46 @@ impl App {
     }
 
     fn draw(&self, frame: &mut Frame) {
-        let title_block = self.create_title_block();
-        let inner_area = title_block.inner(frame.area());
+        let main = self.create_main_area();
+        let inner_area = main.inner(frame.area());
 
-        frame.render_widget(title_block, frame.area());
+        frame.render_widget(main, frame.area());
 
         let [row1, row2] = self.create_layout(inner_area);
 
-        let new_crates_title = Line::from(" New Crates ".bold());
-        let new_crates_block = Block::bordered()
-            .title(new_crates_title.centered())
-            .border_set(border::EMPTY);
+        let new_crates_block = self.create_new_crates_area();
 
         frame.render_widget(
             self.placeholder_paragraph().block(new_crates_block),
             row1[0],
         );
 
-        let just_updated_title = Line::from(" Just Updated ".bold());
-        let just_updated_block = Block::bordered()
-            .title(just_updated_title.centered())
-            .border_set(border::EMPTY);
+        let just_updated_block = self.create_just_updated_area();
 
         frame.render_widget(
             self.placeholder_paragraph().block(just_updated_block),
             row1[1],
         );
 
-        let most_downloaded_title = Line::from(" Most Downloaded ".bold());
-        let most_downloaded_block = Block::bordered()
-            .title(most_downloaded_title.centered())
-            .border_set(border::EMPTY);
+        let most_downloaded_block = self.create_most_downloaded();
 
         frame.render_widget(
             self.placeholder_paragraph().block(most_downloaded_block),
             row1[2],
         );
 
-        let recent_downloads_title = Line::from(" Most Recent Downloads ".bold());
-        let recent_downloads_block = Block::bordered()
-            .title(recent_downloads_title.centered())
-            .border_set(border::EMPTY);
+        let recent_downloads_block = self.create_recent_downloads();
 
         frame.render_widget(
             self.placeholder_paragraph().block(recent_downloads_block),
             row2[0],
         );
 
-        let keyword_title = Line::from(" Popular Keywords ".bold());
-        let keyword_block = Block::bordered()
-            .title(keyword_title.centered())
-            .border_set(border::EMPTY);
+        let keyword_block = self.create_popular_keywords();
 
         frame.render_widget(self.placeholder_paragraph().block(keyword_block), row2[1]);
 
-        let categories_title = Line::from(" Popular Categories ".bold());
-        let categories_block = Block::bordered()
-            .title(categories_title.centered())
-            .border_set(border::EMPTY);
+        let categories_block = self.create_popular_categories();
 
         frame.render_widget(
             self.placeholder_paragraph().block(categories_block),
@@ -139,7 +135,7 @@ impl App {
         [[row1[0], row1[1], row1[2]], [row2[0], row2[1], row2[2]]]
     }
 
-    fn create_title_block(&self) -> Block<'static> {
+    fn create_main_area(&self) -> Block<'static> {
         let main_title = Line::from(" crates.io ".bold());
 
         let instructions = Line::from(vec![
@@ -155,6 +151,35 @@ impl App {
             .title(main_title.centered())
             .title_bottom(instructions.centered())
             .border_set(border::THICK)
+    }
+
+    fn create_new_crates_area(&self) -> Block<'static> {
+        self.create_block("New Crates")
+    }
+
+    fn create_just_updated_area(&self) -> Block<'static> {
+        self.create_block("Just Updated")
+    }
+
+    fn create_most_downloaded(&self) -> Block<'static> {
+        self.create_block("Most Downloaded")
+    }
+
+    fn create_recent_downloads(&self) -> Block<'static> {
+        self.create_block("Most Recent Downloads")
+    }
+
+    fn create_popular_keywords(&self) -> Block<'static> {
+        self.create_block("Popular Keywords")
+    }
+
+    fn create_popular_categories(&self) -> Block<'static> {
+        self.create_block("Popular Categories")
+    }
+
+    fn create_block(&self, title: &'static str) -> Block<'static> {
+        let title = Line::from(title.bold().blue()).left_aligned();
+        Block::bordered().title(title).border_set(border::EMPTY)
     }
 
     fn placeholder_paragraph(&self) -> Paragraph<'static> {
