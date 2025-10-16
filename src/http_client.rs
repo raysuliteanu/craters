@@ -6,7 +6,7 @@ pub struct Crates {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, Default)]
 pub struct CrateInfo {
     pub id: String,
     pub name: String,
@@ -31,7 +31,7 @@ pub struct CrateInfo {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, Default)]
 pub struct Links {
     pub version_downloads: String,
     pub versions: String,
@@ -54,7 +54,7 @@ pub struct HttpClient {
 }
 
 const URL: &str = "https://crates.io/api/v1/crates";
-//                 https://crates.io/api/v1/crates?sort=new
+
 impl Default for HttpClient {
     fn default() -> Self {
         Self::new()

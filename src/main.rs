@@ -36,7 +36,6 @@ enum SelectedSection {
 mod http_client;
 
 #[allow(dead_code)]
-#[derive(Default)]
 pub struct App {
     client: http_client::HttpClient,
     current_section: SelectedSection,
@@ -53,7 +52,49 @@ struct CrateList {
     state: ListState,
 }
 
+impl Default for App {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl App {
+    fn new() -> Self {
+        let client = http_client::HttpClient::new();
+        let mut state: HashMap<SelectedSection, CrateList> = HashMap::new();
+        for section in SelectedSection::iter() {
+            let crate_infos = match section {
+                SelectedSection::NewCrates => client
+                    .fetch_new_crates()
+                    .expect("failed to fetch new crates"),
+                SelectedSection::JustUpdated => client
+                    .fetch_recent_updates()
+                    .expect("failed to fetch recent updates"),
+                SelectedSection::MostDownloaded => client
+                    .fetch_most_downloaded()
+                    .expect("failed to fetch most downloaded"),
+                _ => vec![CrateInfo::default()], // Placeholder for unimplemented sections
+            };
+
+            state.insert(
+                section,
+                CrateList {
+                    crates: crate_infos,
+                    state: ListState::default(),
+                },
+            );
+        }
+
+        App {
+            client,
+            current_section: SelectedSection::NewCrates,
+            state,
+            exit: false,
+            search: false,
+            info: false,
+        }
+    }
+
     /// runs the application's main loop until the user quits
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         while !self.exit {
@@ -269,6 +310,7 @@ impl App {
             .select_previous();
     }
 
+    #[allow(dead_code)]
     fn select_none(&mut self) {
         self.state
             .get_mut(&self.current_section)
@@ -277,6 +319,7 @@ impl App {
             .select(None);
     }
 
+    #[allow(dead_code)]
     fn select_first(&mut self) {
         self.state
             .get_mut(&self.current_section)
