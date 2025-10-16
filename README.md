@@ -111,15 +111,9 @@ cargo fmt
 - [ ] Implement search functionality
 - [ ] Add detailed crate information view
 - [ ] Add keyboard navigation between sections
-- [ ] Implement scrolling within sections
 - [ ] Add filtering and sorting options
-- [ ] Cache API responses for better performance
+- [ ] Async interaction with crates.io
 - [ ] Add support for viewing crate dependencies
-- [ ] Implement color themes
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit issues or pull requests.
 
 ## License
 
