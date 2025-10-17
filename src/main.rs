@@ -114,42 +114,27 @@ impl App {
 
         let new_crates_block = self.create_new_crates_area();
 
-        frame.render_widget(
-            self.placeholder_paragraph().block(new_crates_block),
-            row1[0],
-        );
+        frame.render_widget(new_crates_block, row1[0]);
 
         let just_updated_block = self.create_just_updated_area();
 
-        frame.render_widget(
-            self.placeholder_paragraph().block(just_updated_block),
-            row1[1],
-        );
+        frame.render_widget(just_updated_block, row1[1]);
 
         let most_downloaded_block = self.create_most_downloaded();
 
-        frame.render_widget(
-            self.placeholder_paragraph().block(most_downloaded_block),
-            row1[2],
-        );
+        frame.render_widget(most_downloaded_block, row1[2]);
 
         let recent_downloads_block = self.create_recent_downloads();
 
-        frame.render_widget(
-            self.placeholder_paragraph().block(recent_downloads_block),
-            row2[0],
-        );
+        frame.render_widget(recent_downloads_block, row2[0]);
 
         let keyword_block = self.create_popular_keywords();
 
-        frame.render_widget(self.placeholder_paragraph().block(keyword_block), row2[1]);
+        frame.render_widget(keyword_block, row2[1]);
 
         let categories_block = self.create_popular_categories();
 
-        frame.render_widget(
-            self.placeholder_paragraph().block(categories_block),
-            row2[2],
-        );
+        frame.render_widget(categories_block, row2[2]);
     }
 
     fn create_layout(&self, area: Rect) -> [[Rect; 3]; 2] {
@@ -197,46 +182,106 @@ impl App {
             .border_set(border::THICK)
     }
 
-    fn create_new_crates_area(&self) -> Block<'static> {
-        self.create_block(
+    fn create_new_crates_area(&self) -> Paragraph<'static> {
+        let crate_info = &self
+            .state
+            .get(&SelectedSection::NewCrates)
+            .expect("should have new crates section")
+            .crates;
+        let text = crate_info
+            .iter()
+            .map(|c| Line::from(c.name.clone()))
+            .collect::<Vec<Line>>();
+        let block = self.create_block(
             "New Crates",
             self.current_section == SelectedSection::NewCrates,
-        )
+        );
+        Paragraph::new(text).block(block)
     }
 
-    fn create_just_updated_area(&self) -> Block<'static> {
-        self.create_block(
+    fn create_just_updated_area(&self) -> Paragraph<'static> {
+        let crate_info = &self
+            .state
+            .get(&SelectedSection::JustUpdated)
+            .expect("should have just updated section")
+            .crates;
+        let text = crate_info
+            .iter()
+            .map(|c| Line::from(c.name.clone()))
+            .collect::<Vec<Line>>();
+        let block = self.create_block(
             "Just Updated",
             self.current_section == SelectedSection::JustUpdated,
-        )
+        );
+        Paragraph::new(text).block(block)
     }
 
-    fn create_most_downloaded(&self) -> Block<'static> {
-        self.create_block(
+    fn create_most_downloaded(&self) -> Paragraph<'static> {
+        let crate_info = &self
+            .state
+            .get(&SelectedSection::MostDownloaded)
+            .expect("should have most downloaded section")
+            .crates;
+        let text = crate_info
+            .iter()
+            .map(|c| Line::from(c.name.clone()))
+            .collect::<Vec<Line>>();
+        let block = self.create_block(
             "Most Downloaded",
             self.current_section == SelectedSection::MostDownloaded,
-        )
+        );
+        Paragraph::new(text).block(block)
     }
 
-    fn create_recent_downloads(&self) -> Block<'static> {
-        self.create_block(
-            "Most Recent Downloads",
+    fn create_recent_downloads(&self) -> Paragraph<'static> {
+        let crate_info = &self
+            .state
+            .get(&SelectedSection::RecentDownloads)
+            .expect("should have recent downloads section")
+            .crates;
+        let text = crate_info
+            .iter()
+            .map(|c| Line::from(c.name.clone()))
+            .collect::<Vec<Line>>();
+        let block = self.create_block(
+            "Recent Downloads",
             self.current_section == SelectedSection::RecentDownloads,
-        )
+        );
+        Paragraph::new(text).block(block)
     }
 
-    fn create_popular_keywords(&self) -> Block<'static> {
-        self.create_block(
+    fn create_popular_keywords(&self) -> Paragraph<'static> {
+        let crate_info = &self
+            .state
+            .get(&SelectedSection::Keywords)
+            .expect("should have keywords section")
+            .crates;
+        let text = crate_info
+            .iter()
+            .map(|c| Line::from(c.name.clone()))
+            .collect::<Vec<Line>>();
+        let block = self.create_block(
             "Popular Keywords",
             self.current_section == SelectedSection::Keywords,
-        )
+        );
+        Paragraph::new(text).block(block)
     }
 
-    fn create_popular_categories(&self) -> Block<'static> {
-        self.create_block(
+    fn create_popular_categories(&self) -> Paragraph<'static> {
+        let crate_info = &self
+            .state
+            .get(&SelectedSection::Categories)
+            .expect("should have categories section")
+            .crates;
+        let text = crate_info
+            .iter()
+            .map(|c| Line::from(c.name.clone()))
+            .collect::<Vec<Line>>();
+        let block = self.create_block(
             "Popular Categories",
             self.current_section == SelectedSection::Categories,
-        )
+        );
+        Paragraph::new(text).block(block)
     }
 
     fn create_block(&self, title: &'static str, selected: bool) -> Block<'static> {
@@ -248,18 +293,6 @@ impl App {
         };
 
         Block::bordered().title(title).border_set(border)
-    }
-
-    fn placeholder_paragraph(&self) -> Paragraph<'static> {
-        let crate_info = self
-            .client
-            .fetch_new_crates()
-            .expect("failed to fetch from crates.io");
-        let text = crate_info
-            .iter()
-            .map(|c| Line::from(c.name.clone()))
-            .collect::<Vec<Line>>();
-        Paragraph::new(text)
     }
 
     /// updates the application's state based on user input
