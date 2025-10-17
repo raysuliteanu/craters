@@ -14,7 +14,7 @@ use ratatui::{
     style::Stylize,
     symbols::border,
     text::Line,
-    widgets::{Block, Paragraph},
+    widgets::Block,
 };
 use strum::FromRepr;
 use strum::{Display, EnumIter, IntoEnumIterator};
@@ -120,19 +120,44 @@ impl App {
         frame.render_stateful_widget(new_crates_block, row1[0], state);
 
         let most_downloaded_block = self.create_most_downloaded();
-        frame.render_widget(most_downloaded_block, row1[1]);
+        let state = &mut self
+            .state
+            .get_mut(&SelectedSection::MostDownloaded)
+            .expect("selected section should always exist")
+            .state;
+        frame.render_stateful_widget(most_downloaded_block, row1[1], state);
 
         let just_updated_block = self.create_just_updated_area();
-        frame.render_widget(just_updated_block, row1[2]);
+        let state = &mut self
+            .state
+            .get_mut(&SelectedSection::JustUpdated)
+            .expect("selected section should always exist")
+            .state;
+        frame.render_stateful_widget(just_updated_block, row1[2], state);
 
         let recent_downloads_block = self.create_recent_downloads();
-        frame.render_widget(recent_downloads_block, row2[0]);
+        let state = &mut self
+            .state
+            .get_mut(&SelectedSection::RecentDownloads)
+            .expect("selected section should always exist")
+            .state;
+        frame.render_stateful_widget(recent_downloads_block, row2[0], state);
 
         let keyword_block = self.create_popular_keywords();
-        frame.render_widget(keyword_block, row2[1]);
+        let state = &mut self
+            .state
+            .get_mut(&SelectedSection::PopularKeywords)
+            .expect("selected section should always exist")
+            .state;
+        frame.render_stateful_widget(keyword_block, row2[1], state);
 
         let categories_block = self.create_popular_categories();
-        frame.render_widget(categories_block, row2[2]);
+        let state = &mut self
+            .state
+            .get_mut(&SelectedSection::PopularCategories)
+            .expect("selected section should always exist")
+            .state;
+        frame.render_stateful_widget(categories_block, row2[2], state);
     }
 
     fn create_layout(&self, area: Rect) -> [[Rect; 3]; 2] {
@@ -181,118 +206,51 @@ impl App {
     }
 
     fn create_new_crates_area(&self) -> List<'static> {
-        let crate_info = &self
-            .state
-            .get(&SelectedSection::NewCrates)
-            .expect("should have new crates section")
-            .crates;
-        let list_items = crate_info
-            .iter()
-            .map(|c| ListItem::from(c.name.clone()))
-            .collect::<Vec<ListItem>>();
-        let block = self.create_block(
-            "New Crates",
-            self.current_section == SelectedSection::NewCrates,
-        );
-        List::new(list_items)
-            .block(block)
-            .highlight_style(SELECTED_STYLE)
+        self.create_block("New Crates", SelectedSection::NewCrates)
     }
 
-    fn create_just_updated_area(&self) -> Paragraph<'static> {
-        let crate_info = &self
-            .state
-            .get(&SelectedSection::JustUpdated)
-            .expect("should have just updated section")
-            .crates;
-        let text = crate_info
-            .iter()
-            .map(|c| Line::from(c.name.clone()))
-            .collect::<Vec<Line>>();
-        let block = self.create_block(
-            "Just Updated",
-            self.current_section == SelectedSection::JustUpdated,
-        );
-        Paragraph::new(text).block(block)
+    fn create_most_downloaded(&self) -> List<'static> {
+        self.create_block("Most Downloaded", SelectedSection::MostDownloaded)
     }
 
-    fn create_most_downloaded(&self) -> Paragraph<'static> {
-        let crate_info = &self
-            .state
-            .get(&SelectedSection::MostDownloaded)
-            .expect("should have most downloaded section")
-            .crates;
-        let text = crate_info
-            .iter()
-            .map(|c| Line::from(c.name.clone()))
-            .collect::<Vec<Line>>();
-        let block = self.create_block(
-            "Most Downloaded",
-            self.current_section == SelectedSection::MostDownloaded,
-        );
-        Paragraph::new(text).block(block)
+    fn create_just_updated_area(&self) -> List<'static> {
+        self.create_block("Just Updated", SelectedSection::JustUpdated)
     }
 
-    fn create_recent_downloads(&self) -> Paragraph<'static> {
-        let crate_info = &self
-            .state
-            .get(&SelectedSection::RecentDownloads)
-            .expect("should have recent downloads section")
-            .crates;
-        let text = crate_info
-            .iter()
-            .map(|c| Line::from(c.name.clone()))
-            .collect::<Vec<Line>>();
-        let block = self.create_block(
-            "Recent Downloads",
-            self.current_section == SelectedSection::RecentDownloads,
-        );
-        Paragraph::new(text).block(block)
+    fn create_recent_downloads(&self) -> List<'static> {
+        self.create_block("Recent Downloads", SelectedSection::RecentDownloads)
     }
 
-    fn create_popular_keywords(&self) -> Paragraph<'static> {
-        let crate_info = &self
-            .state
-            .get(&SelectedSection::PopularKeywords)
-            .expect("should have keywords section")
-            .crates;
-        let text = crate_info
-            .iter()
-            .map(|c| Line::from(c.name.clone()))
-            .collect::<Vec<Line>>();
-        let block = self.create_block(
-            "Popular Keywords",
-            self.current_section == SelectedSection::PopularKeywords,
-        );
-        Paragraph::new(text).block(block)
+    fn create_popular_keywords(&self) -> List<'static> {
+        self.create_block("Popular Keywords", SelectedSection::PopularKeywords)
     }
 
-    fn create_popular_categories(&self) -> Paragraph<'static> {
-        let crate_info = &self
-            .state
-            .get(&SelectedSection::PopularCategories)
-            .expect("should have categories section")
-            .crates;
-        let text = crate_info
-            .iter()
-            .map(|c| Line::from(c.name.clone()))
-            .collect::<Vec<Line>>();
-        let block = self.create_block(
-            "Popular Categories",
-            self.current_section == SelectedSection::PopularCategories,
-        );
-        Paragraph::new(text).block(block)
+    fn create_popular_categories(&self) -> List<'static> {
+        self.create_block("Popular Categories", SelectedSection::PopularCategories)
     }
 
-    fn create_block(&self, title: &'static str, selected: bool) -> Block<'static> {
+    fn create_block(&self, title: &'static str, section: SelectedSection) -> List<'static> {
         let title = Line::from(title.bold().blue()).left_aligned();
-        let border = if selected {
+
+        let border = if section == self.current_section {
             border::PLAIN
         } else {
             border::EMPTY
         };
 
-        Block::bordered().title(title).border_set(border)
+        let block = Block::bordered().title(title).border_set(border);
+        let crate_info = &self
+            .state
+            .get(&section)
+            .expect("should have section")
+            .crates;
+        let list_items = crate_info
+            .iter()
+            .map(|c| ListItem::from(c.name.clone()))
+            .collect::<Vec<ListItem>>();
+        List::new(list_items)
+            .block(block)
+            .highlight_style(SELECTED_STYLE)
     }
 
     /// updates the application's state based on user input
