@@ -29,8 +29,8 @@ enum SelectedSection {
     MostDownloaded,
     JustUpdated,
     RecentDownloads,
-    Keywords,
-    Categories,
+    PopularKeywords,
+    PopularCategories,
 }
 
 mod http_client;
@@ -250,7 +250,7 @@ impl App {
     fn create_popular_keywords(&self) -> Paragraph<'static> {
         let crate_info = &self
             .state
-            .get(&SelectedSection::Keywords)
+            .get(&SelectedSection::PopularKeywords)
             .expect("should have keywords section")
             .crates;
         let text = crate_info
@@ -259,7 +259,7 @@ impl App {
             .collect::<Vec<Line>>();
         let block = self.create_block(
             "Popular Keywords",
-            self.current_section == SelectedSection::Keywords,
+            self.current_section == SelectedSection::PopularKeywords,
         );
         Paragraph::new(text).block(block)
     }
@@ -267,7 +267,7 @@ impl App {
     fn create_popular_categories(&self) -> Paragraph<'static> {
         let crate_info = &self
             .state
-            .get(&SelectedSection::Categories)
+            .get(&SelectedSection::PopularCategories)
             .expect("should have categories section")
             .crates;
         let text = crate_info
@@ -276,7 +276,7 @@ impl App {
             .collect::<Vec<Line>>();
         let block = self.create_block(
             "Popular Categories",
-            self.current_section == SelectedSection::Categories,
+            self.current_section == SelectedSection::PopularCategories,
         );
         Paragraph::new(text).block(block)
     }
@@ -367,10 +367,11 @@ impl App {
     }
 
     fn previous_section(&mut self) {
-        let mut previous = self.current_section as usize;
-        if self.current_section as isize - 1 < 0 {
-            previous = SelectedSection::iter().count() - 1;
-        }
+        let previous = if self.current_section as isize - 1 < 0 {
+            SelectedSection::iter().count() - 1
+        } else {
+            self.current_section as usize - 1
+        };
         self.current_section = SelectedSection::from_repr(previous).unwrap_or_default();
     }
 
@@ -400,9 +401,23 @@ mod tests {
     #[tokio::test]
     async fn handle_key_event() -> io::Result<()> {
         let mut app = App::new().await;
+
+        assert_eq!(app.current_section, SelectedSection::NewCrates);
+
         app.handle_key_event(KeyCode::Right.into());
+        assert_eq!(app.current_section, SelectedSection::MostDownloaded);
+
+        app.handle_key_event(KeyCode::Right.into());
+        assert_eq!(app.current_section, SelectedSection::JustUpdated);
 
         app.handle_key_event(KeyCode::Left.into());
+        assert_eq!(app.current_section, SelectedSection::MostDownloaded);
+
+        app.handle_key_event(KeyCode::Left.into());
+        assert_eq!(app.current_section, SelectedSection::NewCrates);
+
+        app.handle_key_event(KeyCode::Left.into());
+        assert_eq!(app.current_section, SelectedSection::PopularCategories);
 
         let mut app = App::new().await;
         app.handle_key_event(KeyCode::Char('q').into());
