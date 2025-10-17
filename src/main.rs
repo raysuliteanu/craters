@@ -52,26 +52,23 @@ struct CrateList {
     state: ListState,
 }
 
-impl Default for App {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl App {
-    fn new() -> Self {
+    async fn new() -> Self {
         let client = http_client::HttpClient::new();
         let mut state: HashMap<SelectedSection, CrateList> = HashMap::new();
         for section in SelectedSection::iter() {
             let crate_infos = match section {
                 SelectedSection::NewCrates => client
                     .fetch_new_crates()
+                    .await
                     .expect("failed to fetch new crates"),
                 SelectedSection::JustUpdated => client
                     .fetch_recent_updates()
+                    .await
                     .expect("failed to fetch recent updates"),
                 SelectedSection::MostDownloaded => client
                     .fetch_most_downloaded()
+                    .await
                     .expect("failed to fetch most downloaded"),
                 _ => vec![CrateInfo::default()], // Placeholder for unimplemented sections
             };
@@ -382,7 +379,8 @@ impl App {
     fn query(&mut self) {}
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     WriteLogger::init(
         LevelFilter::Debug,
         Config::default(),
@@ -390,7 +388,7 @@ fn main() -> Result<()> {
     )
     .unwrap();
     let mut terminal = ratatui::init();
-    let app_result = App::default().run(&mut terminal);
+    let app_result = App::new().await.run(&mut terminal);
     ratatui::restore();
     app_result
 }
@@ -399,14 +397,14 @@ fn main() -> Result<()> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn handle_key_event() -> io::Result<()> {
-        let mut app = App::default();
+    #[tokio::test]
+    async fn handle_key_event() -> io::Result<()> {
+        let mut app = App::new().await;
         app.handle_key_event(KeyCode::Right.into());
 
         app.handle_key_event(KeyCode::Left.into());
 
-        let mut app = App::default();
+        let mut app = App::new().await;
         app.handle_key_event(KeyCode::Char('q').into());
         assert!(app.exit);
 

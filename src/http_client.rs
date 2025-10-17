@@ -1,3 +1,4 @@
+use log::debug;
 use thiserror::Error;
 
 #[derive(Debug, serde::Deserialize)]
@@ -16,14 +17,14 @@ pub struct CrateInfo {
     pub updated_at: String,
     pub created_at: String,
     pub downloads: u32,
-    pub recent_downloads: u32,
+    pub recent_downloads: Option<u32>,
     pub default_version: String,
     pub num_versions: u32,
     pub yanked: bool,
     pub max_version: String,
     pub newest_version: String,
-    pub max_stable_version: String,
-    pub description: String,
+    pub max_stable_version: Option<String>,
+    pub description: Option<String>,
     pub homepage: Option<String>,
     pub documentation: Option<String>,
     pub repository: Option<String>,
@@ -50,7 +51,7 @@ pub enum ClientError {
 }
 
 pub struct HttpClient {
-    client: reqwest::blocking::Client,
+    client: reqwest::Client,
 }
 
 const URL: &str = "https://crates.io/api/v1/crates";
@@ -64,7 +65,7 @@ impl Default for HttpClient {
 #[allow(dead_code)]
 impl HttpClient {
     pub fn new() -> Self {
-        let client = reqwest::blocking::Client::builder()
+        let client = reqwest::Client::builder()
             .user_agent("craters/0.1.0 (https://github.com/raysuliteanu/craters)")
             .build()
             .expect("Failed to build HTTP client");
@@ -72,32 +73,34 @@ impl HttpClient {
         HttpClient { client }
     }
 
-    pub fn fetch_new_crates(&self) -> Result<Vec<CrateInfo>, ClientError> {
-        let crate_info: Vec<CrateInfo> = self.sort("new")?;
+    pub async fn fetch_new_crates(&self) -> Result<Vec<CrateInfo>, ClientError> {
+        let crate_info: Vec<CrateInfo> = self.sort("new").await?;
         Ok(crate_info)
     }
 
-    pub fn fetch_most_downloaded(&self) -> Result<Vec<CrateInfo>, ClientError> {
-        let crate_info: Vec<CrateInfo> = self.sort("downloads")?;
+    pub async fn fetch_most_downloaded(&self) -> Result<Vec<CrateInfo>, ClientError> {
+        let crate_info: Vec<CrateInfo> = self.sort("downloads").await?;
         Ok(crate_info)
     }
 
-    pub fn fetch_recent_updates(&self) -> Result<Vec<CrateInfo>, ClientError> {
-        let crate_info: Vec<CrateInfo> = self.sort("recent-updates")?;
+    pub async fn fetch_recent_updates(&self) -> Result<Vec<CrateInfo>, ClientError> {
+        let crate_info: Vec<CrateInfo> = self.sort("recent-updates").await?;
         Ok(crate_info)
     }
 
-    fn sort(&self, param: &str) -> Result<Vec<CrateInfo>, ClientError> {
+    async fn sort(&self, param: &str) -> Result<Vec<CrateInfo>, ClientError> {
         let request = self.client.get(URL).query(&[("sort", param)]);
-        let response = request.send().map_err(ClientError::RequestError)?;
-        let text = response.text().map_err(ClientError::RequestError)?;
+        let response = request.send().await;
+        debug!("Response: {:?}", response);
+        let response = response.map_err(ClientError::RequestError)?;
+        let text = response.text().await.map_err(ClientError::RequestError)?;
         let crates: Crates = serde_json::from_str(&text).map_err(ClientError::ParseError)?;
         Ok(crates.crates)
     }
 
-    pub fn fetch_crate_info(&self, crate_name: &str) -> Result<CrateInfo, ClientError> {
+    pub async fn fetch_crate_info(&self, crate_name: &str) -> Result<CrateInfo, ClientError> {
         let url = format!("{}{}", URL, crate_name);
-        let crate_info: CrateInfo = self.client.get(&url).send()?.json()?;
+        let crate_info: CrateInfo = self.client.get(&url).send().await?.json().await?;
         Ok(crate_info)
     }
 }
@@ -106,10 +109,10 @@ impl HttpClient {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_fetch_new_crates() {
+    #[tokio::test]
+    async fn test_fetch_new_crates() {
         let client = HttpClient::new();
-        let result = client.fetch_new_crates();
+        let result = client.fetch_new_crates().await;
 
         match result {
             Ok(crates) => {
