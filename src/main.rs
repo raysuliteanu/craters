@@ -110,27 +110,21 @@ impl App {
         let [row1, row2] = self.create_layout(inner_area);
 
         let new_crates_block = self.create_new_crates_area();
-
         frame.render_widget(new_crates_block, row1[0]);
 
-        let just_updated_block = self.create_just_updated_area();
-
-        frame.render_widget(just_updated_block, row1[1]);
-
         let most_downloaded_block = self.create_most_downloaded();
+        frame.render_widget(most_downloaded_block, row1[1]);
 
-        frame.render_widget(most_downloaded_block, row1[2]);
+        let just_updated_block = self.create_just_updated_area();
+        frame.render_widget(just_updated_block, row1[2]);
 
         let recent_downloads_block = self.create_recent_downloads();
-
         frame.render_widget(recent_downloads_block, row2[0]);
 
         let keyword_block = self.create_popular_keywords();
-
         frame.render_widget(keyword_block, row2[1]);
 
         let categories_block = self.create_popular_categories();
-
         frame.render_widget(categories_block, row2[2]);
     }
 
