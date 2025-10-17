@@ -26,8 +26,8 @@ use crate::http_client::CrateInfo;
 enum SelectedSection {
     #[default]
     NewCrates,
-    JustUpdated,
     MostDownloaded,
+    JustUpdated,
     RecentDownloads,
     Keywords,
     Categories,
