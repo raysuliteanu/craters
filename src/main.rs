@@ -1,20 +1,20 @@
 use anyhow::Result;
 use log::debug;
-use ratatui::widgets::ListState;
+use ratatui::{
+    style::{Color, Modifier, Style},
+    widgets::{List, ListItem, ListState},
+};
 use simplelog::{Config, LevelFilter, WriteLogger};
 use std::{collections::HashMap, fs::File, io};
 
-#[allow(unused_imports)]
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
-#[allow(unused_imports)]
 use ratatui::{
     DefaultTerminal, Frame,
-    buffer::Buffer,
     layout::{Constraint, Layout, Rect},
     style::Stylize,
     symbols::border,
-    text::{Line, Text},
-    widgets::{Block, Paragraph, Widget, Wrap},
+    text::Line,
+    widgets::{Block, Paragraph},
 };
 use strum::FromRepr;
 use strum::{Display, EnumIter, IntoEnumIterator};
@@ -51,6 +51,8 @@ struct CrateList {
     crates: Vec<CrateInfo>,
     state: ListState,
 }
+
+const SELECTED_STYLE: Style = Style::new().add_modifier(Modifier::BOLD).fg(Color::Blue);
 
 impl App {
     async fn new() -> Self {
@@ -101,7 +103,7 @@ impl App {
         Ok(())
     }
 
-    fn draw(&self, frame: &mut Frame) {
+    fn draw(&mut self, frame: &mut Frame) {
         let main = self.create_main_area();
         let inner_area = main.inner(frame.area());
 
@@ -110,7 +112,12 @@ impl App {
         let [row1, row2] = self.create_layout(inner_area);
 
         let new_crates_block = self.create_new_crates_area();
-        frame.render_widget(new_crates_block, row1[0]);
+        let state = &mut self
+            .state
+            .get_mut(&SelectedSection::NewCrates)
+            .expect("selected section should always exist")
+            .state;
+        frame.render_stateful_widget(new_crates_block, row1[0], state);
 
         let most_downloaded_block = self.create_most_downloaded();
         frame.render_widget(most_downloaded_block, row1[1]);
@@ -173,21 +180,23 @@ impl App {
             .border_set(border::THICK)
     }
 
-    fn create_new_crates_area(&self) -> Paragraph<'static> {
+    fn create_new_crates_area(&self) -> List<'static> {
         let crate_info = &self
             .state
             .get(&SelectedSection::NewCrates)
             .expect("should have new crates section")
             .crates;
-        let text = crate_info
+        let list_items = crate_info
             .iter()
-            .map(|c| Line::from(c.name.clone()))
-            .collect::<Vec<Line>>();
+            .map(|c| ListItem::from(c.name.clone()))
+            .collect::<Vec<ListItem>>();
         let block = self.create_block(
             "New Crates",
             self.current_section == SelectedSection::NewCrates,
         );
-        Paragraph::new(text).block(block)
+        List::new(list_items)
+            .block(block)
+            .highlight_style(SELECTED_STYLE)
     }
 
     fn create_just_updated_area(&self) -> Paragraph<'static> {
