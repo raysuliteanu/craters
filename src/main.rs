@@ -1,4 +1,5 @@
 use anyhow::Result;
+use crates_io_api::Summary;
 use log::debug;
 use ratatui::{
     style::{Color, Modifier, Style},
@@ -19,7 +20,7 @@ use ratatui::{
 use strum::FromRepr;
 use strum::{Display, EnumIter, IntoEnumIterator};
 
-use crate::http_client::CrateInfo;
+use crate::crates_io_client::HttpClient;
 
 // NOTE: order matters in this list for proper next/previous navigation
 #[derive(Default, Debug, Copy, Clone, Display, FromRepr, EnumIter, PartialEq, Eq, Hash)]
@@ -33,60 +34,39 @@ enum SelectedSection {
     PopularCategories,
 }
 
-mod http_client;
+mod crates_io_client;
 
 #[allow(dead_code)]
 pub struct App {
-    client: http_client::HttpClient,
+    client: crates_io_client::HttpClient,
+    summary: Summary,
     current_section: SelectedSection,
-    state: HashMap<SelectedSection, CrateList>,
+    state: HashMap<SelectedSection, ListState>,
     exit: bool,
     search: bool,
     info: bool,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Default)]
-struct CrateList {
-    crates: Vec<CrateInfo>,
-    state: ListState,
 }
 
 const SELECTED_STYLE: Style = Style::new().add_modifier(Modifier::BOLD).fg(Color::Blue);
 
 impl App {
     async fn new() -> Self {
-        let client = http_client::HttpClient::new();
-        let mut state: HashMap<SelectedSection, CrateList> = HashMap::new();
+        let client = HttpClient::new();
+        let mut state: HashMap<SelectedSection, ListState> = HashMap::new();
         for section in SelectedSection::iter() {
-            let crate_infos = match section {
-                SelectedSection::NewCrates => client
-                    .fetch_new_crates()
-                    .await
-                    .expect("failed to fetch new crates"),
-                SelectedSection::JustUpdated => client
-                    .fetch_recent_updates()
-                    .await
-                    .expect("failed to fetch recent updates"),
-                SelectedSection::MostDownloaded => client
-                    .fetch_most_downloaded()
-                    .await
-                    .expect("failed to fetch most downloaded"),
-                _ => vec![CrateInfo::default()], // Placeholder for unimplemented sections
-            };
-
-            state.insert(
-                section,
-                CrateList {
-                    crates: crate_infos,
-                    state: ListState::default(),
-                },
-            );
+            let mut list_state = ListState::default();
+            list_state.select(Some(0));
+            state.insert(section, list_state);
         }
+        let summary = client
+            .fetch_summary()
+            .await
+            .expect("failed to fetch summary");
 
         App {
             client,
             current_section: SelectedSection::NewCrates,
+            summary,
             state,
             exit: false,
             search: false,
@@ -115,48 +95,42 @@ impl App {
         let state = &mut self
             .state
             .get_mut(&SelectedSection::NewCrates)
-            .expect("selected section should always exist")
-            .state;
+            .expect("selected section should always exist");
         frame.render_stateful_widget(new_crates_block, row1[0], state);
 
         let most_downloaded_block = self.create_most_downloaded();
         let state = &mut self
             .state
             .get_mut(&SelectedSection::MostDownloaded)
-            .expect("selected section should always exist")
-            .state;
+            .expect("selected section should always exist");
         frame.render_stateful_widget(most_downloaded_block, row1[1], state);
 
         let just_updated_block = self.create_just_updated_area();
         let state = &mut self
             .state
             .get_mut(&SelectedSection::JustUpdated)
-            .expect("selected section should always exist")
-            .state;
+            .expect("selected section should always exist");
         frame.render_stateful_widget(just_updated_block, row1[2], state);
 
         let recent_downloads_block = self.create_recent_downloads();
         let state = &mut self
             .state
             .get_mut(&SelectedSection::RecentDownloads)
-            .expect("selected section should always exist")
-            .state;
+            .expect("selected section should always exist");
         frame.render_stateful_widget(recent_downloads_block, row2[0], state);
 
         let keyword_block = self.create_popular_keywords();
         let state = &mut self
             .state
             .get_mut(&SelectedSection::PopularKeywords)
-            .expect("selected section should always exist")
-            .state;
+            .expect("selected section should always exist");
         frame.render_stateful_widget(keyword_block, row2[1], state);
 
         let categories_block = self.create_popular_categories();
         let state = &mut self
             .state
             .get_mut(&SelectedSection::PopularCategories)
-            .expect("selected section should always exist")
-            .state;
+            .expect("selected section should always exist");
         frame.render_stateful_widget(categories_block, row2[2], state);
     }
 
@@ -239,14 +213,47 @@ impl App {
         };
 
         let block = Block::bordered().title(title).border_set(border);
-        let crate_info = &self
-            .state
-            .get(&section)
-            .expect("should have section")
-            .crates;
+        let crate_info = match section {
+            SelectedSection::NewCrates => &self
+                .summary
+                .new_crates
+                .iter()
+                .map(|c| &c.name)
+                .collect::<Vec<&String>>(),
+            SelectedSection::MostDownloaded => &self
+                .summary
+                .most_downloaded
+                .iter()
+                .map(|c| &c.name)
+                .collect::<Vec<&String>>(),
+            SelectedSection::JustUpdated => &self
+                .summary
+                .just_updated
+                .iter()
+                .map(|c| &c.name)
+                .collect::<Vec<&String>>(),
+            SelectedSection::RecentDownloads => &self
+                .summary
+                .most_recently_downloaded
+                .iter()
+                .map(|c| &c.name)
+                .collect::<Vec<&String>>(),
+            SelectedSection::PopularKeywords => &self
+                .summary
+                .popular_keywords
+                .iter()
+                .map(|c| &c.keyword)
+                .collect::<Vec<&String>>(),
+            SelectedSection::PopularCategories => &self
+                .summary
+                .popular_categories
+                .iter()
+                .map(|c| &c.category)
+                .collect::<Vec<&String>>(),
+        };
         let list_items = crate_info
             .iter()
-            .map(|c| ListItem::from(c.name.clone()))
+            .map(|s| ListItem::from(s.to_string()))
             .collect::<Vec<ListItem>>();
         List::new(list_items)
             .block(block)
@@ -288,7 +295,6 @@ impl App {
         self.state
             .get_mut(&self.current_section)
             .expect("should always have a section selected")
-            .state
             .select_next();
     }
 
@@ -297,7 +303,6 @@ impl App {
         self.state
             .get_mut(&self.current_section)
             .expect("should always have a section selected")
-            .state
             .select_previous();
     }
 
@@ -306,7 +311,6 @@ impl App {
         self.state
             .get_mut(&self.current_section)
             .expect("should always have a section selected")
-            .state
             .select(None);
     }
 
@@ -315,7 +319,6 @@ impl App {
         self.state
             .get_mut(&self.current_section)
             .expect("should always have a section selected")
-            .state
             .select_first();
     }
 
