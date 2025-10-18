@@ -108,11 +108,12 @@ cargo fmt
 
 ## Roadmap
 
+- [ ] Use crates_io_api crate
 - [ ] Implement search functionality
 - [ ] Add detailed crate information view
 - [ ] Add keyboard navigation between sections
 - [ ] Add filtering and sorting options
-- [ ] Async interaction with crates.io
+- [x] Async interaction with crates.io; but plan to move to crates_io_api async
 - [ ] Add support for viewing crate dependencies
 
 ## License
