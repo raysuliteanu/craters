@@ -2,8 +2,9 @@ use anyhow::Result;
 use crates_io_api::Summary;
 use log::debug;
 use ratatui::{
+    layout::Flex,
     style::{Color, Modifier, Style},
-    widgets::{List, ListItem, ListState},
+    widgets::{Clear, List, ListItem, ListState, Paragraph},
 };
 use simplelog::{Config, LevelFilter, WriteLogger};
 use std::{collections::HashMap, fs::File, io};
@@ -79,6 +80,10 @@ impl App {
         while !self.exit {
             terminal.draw(|frame| self.draw(frame))?;
             self.handle_events()?;
+            if self.exit && self.info {
+                self.info = false;
+                self.exit = false;
+            }
         }
         Ok(())
     }
@@ -132,6 +137,10 @@ impl App {
             .get_mut(&SelectedSection::PopularCategories)
             .expect("selected section should always exist");
         frame.render_stateful_widget(categories_block, row2[2], state);
+
+        if self.info {
+            self.info(frame);
+        }
     }
 
     fn create_layout(&self, area: Rect) -> [[Rect; 3]; 2] {
@@ -275,8 +284,8 @@ impl App {
 
     fn handle_key_event(&mut self, key_event: KeyEvent) {
         match key_event.code {
-            KeyCode::Char('s') => self.query(),
-            KeyCode::Char('i') => self.info(),
+            KeyCode::Char('s') => self.search = true,
+            KeyCode::Char('i') => self.info = true,
             KeyCode::Char('q') | KeyCode::Esc => self.exit(),
             KeyCode::Char('l') | KeyCode::Right | KeyCode::Tab => self.next_section(),
             KeyCode::Char('h') | KeyCode::Left | KeyCode::BackTab => self.previous_section(),
@@ -339,8 +348,46 @@ impl App {
         self.current_section = SelectedSection::from_repr(previous).unwrap_or_default();
     }
 
-    fn info(&mut self) {}
+    fn info(&mut self, frame: &mut Frame) {
+        let list_state = self
+            .state
+            .get(&self.current_section)
+            .expect("sections always exist");
+        let selected_index = list_state.selected().unwrap_or(0);
+        let krate = match self.current_section {
+            SelectedSection::NewCrates => self.summary.new_crates.get(selected_index).unwrap(),
+            SelectedSection::MostDownloaded => {
+                self.summary.most_downloaded.get(selected_index).unwrap()
+            }
+            SelectedSection::JustUpdated => self.summary.just_updated.get(selected_index).unwrap(),
+            SelectedSection::RecentDownloads => self
+                .summary
+                .most_recently_downloaded
+                .get(selected_index)
+                .unwrap(),
+            SelectedSection::PopularKeywords => todo!(),
+            SelectedSection::PopularCategories => todo!(),
+        };
 
+        let block = Block::bordered().title(krate.name.clone());
+        let paragraph = Paragraph::new(format!("{:?}", krate,))
+            .block(block)
+            .wrap(ratatui::widgets::Wrap { trim: true });
+        let area = App::popup_area(frame.area(), 60, 60);
+        frame.render_widget(Clear, area); //this clears out the background
+        frame.render_widget(paragraph, area);
+    }
+
+    /// helper function to create a centered rect using up certain percentage of the available rect `r`
+    fn popup_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
+        let vertical = Layout::vertical([Constraint::Percentage(percent_y)]).flex(Flex::Center);
+        let horizontal = Layout::horizontal([Constraint::Percentage(percent_x)]).flex(Flex::Center);
+        let [area] = vertical.areas(area);
+        let [area] = horizontal.areas(area);
+        area
+    }
+
+    #[allow(dead_code)]
     fn query(&mut self) {}
 }
 
