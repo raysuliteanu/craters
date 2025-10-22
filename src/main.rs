@@ -480,8 +480,8 @@ impl App {
                     keywords
                         .iter()
                         .map(|k| format!("#{}", k))
-                        .collect::<Vec<String>>()
-                        .join("\t")
+                        .flat_map(|s| [Span::from(s).fg(Color::Green), Span::from("    ")])
+                        .collect::<Vec<Span>>()
                 })
                 .unwrap_or_default();
             let name = Span::from(krate.name.clone()).bold().fg(Color::Cyan);
@@ -491,7 +491,7 @@ impl App {
                 Line::from(""),
                 Line::from(desc),
                 Line::from(""),
-                Line::from(tags.green()),
+                Line::from(tags),
             ]
         } else {
             // Fallback if crate info not yet loaded
