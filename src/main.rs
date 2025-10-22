@@ -5,7 +5,7 @@ use ratatui::{
     layout::Flex,
     style::{Color, Modifier, Style},
     text::Span,
-    widgets::{Clear, List, ListItem, ListState, Paragraph},
+    widgets::{Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 use simplelog::{Config, LevelFilter, WriteLogger};
 use std::{collections::HashMap, fs::File, io};
@@ -40,17 +40,17 @@ mod crates_io_client;
 
 #[allow(dead_code)]
 pub struct App {
-    client: crates_io_client::HttpClient,
+    client: HttpClient,
     summary: Summary,
     current_section: SelectedSection,
     state: HashMap<SelectedSection, ListState>,
     crates: HashMap<String, CrateResponse>,
-    exit: bool,
+    should_exit: bool,
     search: bool,
-    info: bool,
+    show_info_popup: bool,
 }
 
-const SELECTED_STYLE: Style = Style::new().add_modifier(Modifier::BOLD).fg(Color::Blue);
+const LIST_ITEM_SELECTED_STYLE: Style = Style::new().add_modifier(Modifier::BOLD).fg(Color::Blue);
 
 impl App {
     async fn new() -> Self {
@@ -72,20 +72,24 @@ impl App {
             summary,
             state,
             crates: HashMap::new(),
-            exit: false,
+            should_exit: false,
             search: false,
-            info: false,
+            show_info_popup: false,
         }
     }
 
     /// runs the application's main loop until the user quits
     pub async fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
-        while !self.exit {
+        while !self.should_exit {
             terminal.draw(|frame| self.draw(frame))?;
+
             self.handle_events().await?;
-            if self.exit && self.info {
-                self.info = false;
-                self.exit = false;
+
+            // user pressed 'q' or 'esc' while info popup was open, so make sure we only close the
+            // popup, and don't exit the app
+            if self.should_exit && self.show_info_popup {
+                self.show_info_popup = false;
+                self.should_exit = false;
             }
         }
         Ok(())
@@ -141,15 +145,22 @@ impl App {
             .expect("selected section should always exist");
         frame.render_stateful_widget(categories_block, row2[2], state);
 
-        if self.info {
-            self.info(frame);
+        if self.show_info_popup {
+            self.render_info_popup(frame);
         }
     }
 
     fn create_layout(&self, area: Rect) -> [[Rect; 3]; 2] {
+        // Each block needs: 10 lines (content) + 2 lines (borders) + 1 line (title) = 13 lines
+        let block_height = 13;
+
         let rows = Layout::default()
             .direction(ratatui::layout::Direction::Vertical)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .constraints([
+                Constraint::Min(block_height),
+                Constraint::Min(block_height),
+                Constraint::Min(0),  // Take remaining space
+            ])
             .split(area);
 
         let row1 = Layout::default()
@@ -269,7 +280,7 @@ impl App {
             .collect::<Vec<ListItem>>();
         List::new(list_items)
             .block(block)
-            .highlight_style(SELECTED_STYLE)
+            .highlight_style(LIST_ITEM_SELECTED_STYLE)
     }
 
     /// updates the application's state based on user input
@@ -299,7 +310,7 @@ impl App {
     }
 
     fn exit(&mut self) {
-        self.exit = true;
+        self.should_exit = true;
     }
 
     async fn show_info(&mut self) {
@@ -344,7 +355,6 @@ impl App {
                 _ => unreachable!(),
             };
 
-            // Fetch and cache if not already cached
             if !self.crates.contains_key(crate_name)
                 && let Ok(crate_response) = self.client.fetch_crate_info(crate_name).await
             {
@@ -352,7 +362,7 @@ impl App {
             }
         }
 
-        self.info = true;
+        self.show_info_popup = true;
     }
 
     fn select_next(&mut self) {
@@ -404,7 +414,7 @@ impl App {
         self.current_section = SelectedSection::from_repr(previous).unwrap_or_default();
     }
 
-    fn info(&mut self, frame: &mut Frame) {
+    fn render_info_popup(&mut self, frame: &mut Frame) {
         let list_state = self
             .state
             .get(&self.current_section)
@@ -437,9 +447,7 @@ impl App {
         };
 
         let block = Block::bordered();
-        let paragraph = Paragraph::new(lines)
-            .block(block)
-            .wrap(ratatui::widgets::Wrap { trim: true });
+        let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
         let area = App::popup_area(frame.area(), 60, 60);
         frame.render_widget(Clear, area);
         frame.render_widget(paragraph, area);
@@ -533,7 +541,7 @@ mod tests {
 
         let mut app = App::new().await;
         app.handle_key_event(KeyCode::Char('q').into()).await;
-        assert!(app.exit);
+        assert!(app.should_exit);
 
         Ok(())
     }
