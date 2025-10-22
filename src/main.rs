@@ -50,7 +50,8 @@ pub struct App {
     show_info_popup: bool,
 }
 
-const LIST_ITEM_SELECTED_STYLE: Style = Style::new().add_modifier(Modifier::BOLD).fg(Color::Blue);
+const LIST_ITEM_SELECTED_STYLE: Style = Style::new().add_modifier(Modifier::BOLD).fg(Color::Cyan);
+const COLOR_BLACK: Color = Color::Rgb(0, 0, 0);
 
 impl App {
     async fn new() -> Self {
@@ -98,7 +99,7 @@ impl App {
     fn draw(&mut self, frame: &mut Frame) {
         let main = self.create_main_area();
         let inner_area = main.inner(frame.area());
-
+        frame.render_widget(Clear, inner_area);
         frame.render_widget(main, frame.area());
 
         let [row1, row2] = self.create_layout(inner_area);
@@ -159,7 +160,7 @@ impl App {
             .constraints([
                 Constraint::Min(block_height),
                 Constraint::Min(block_height),
-                Constraint::Min(0),  // Take remaining space
+                Constraint::Min(0), // Take remaining space
             ])
             .split(area);
 
@@ -185,7 +186,7 @@ impl App {
     }
 
     fn create_main_area(&self) -> Block<'static> {
-        let main_title = Line::from(" crates.io ".bold());
+        let main_title = Line::from(" crates.io ".bold()).white().centered();
 
         let instructions = Line::from(vec![
             " Search ".into(),
@@ -197,9 +198,11 @@ impl App {
         ]);
 
         Block::bordered()
-            .title(main_title.centered())
+            .title(main_title)
             .title_bottom(instructions.centered())
             .border_set(border::THICK)
+            .bg(COLOR_BLACK)
+            .fg(Color::White)
     }
 
     fn create_new_crates_area(&self) -> List<'static> {
@@ -235,7 +238,10 @@ impl App {
             border::EMPTY
         };
 
-        let block = Block::bordered().title(title).border_set(border);
+        let block = Block::bordered()
+            .title(title)
+            .border_set(border)
+            .bg(COLOR_BLACK);
         let crate_info = match section {
             SelectedSection::NewCrates => &self
                 .summary
@@ -274,12 +280,14 @@ impl App {
                 .map(|c| &c.category)
                 .collect::<Vec<&String>>(),
         };
+
         let list_items = crate_info
             .iter()
             .map(|s| ListItem::from(s.to_string()))
             .collect::<Vec<ListItem>>();
         List::new(list_items)
             .block(block)
+            .style(Style::default().fg(Color::White))
             .highlight_style(LIST_ITEM_SELECTED_STYLE)
     }
 
@@ -352,7 +360,7 @@ impl App {
                         .unwrap()
                         .name
                 }
-                _ => unreachable!(),
+                _ => todo!("keywords and categories"),
             };
 
             if !self.crates.contains_key(crate_name)
@@ -446,8 +454,12 @@ impl App {
             _ => todo!("info for other sections not implemented yet"),
         };
 
-        let block = Block::bordered();
-        let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
+        let block = Block::bordered().bg(COLOR_BLACK).fg(Color::White);
+        let paragraph = Paragraph::new(lines)
+            .block(block)
+            .wrap(Wrap { trim: true })
+            .fg(Color::White)
+            .bg(COLOR_BLACK);
         let area = App::popup_area(frame.area(), 60, 60);
         frame.render_widget(Clear, area);
         frame.render_widget(paragraph, area);
@@ -472,10 +484,10 @@ impl App {
                         .join("\t")
                 })
                 .unwrap_or_default();
-            let name = Span::from(krate.name.clone()).bold();
+            let name = Span::from(krate.name.clone()).bold().fg(Color::Cyan);
             let version = Span::from(krate.max_version.clone());
             vec![
-                Line::from(vec![name, Span::from("    "), version]),
+                Line::from(vec![name, Span::from("    v"), version]),
                 Line::from(""),
                 Line::from(desc),
                 Line::from(""),
