@@ -1,9 +1,10 @@
 use anyhow::Result;
-use crates_io_api::Summary;
+use crates_io_api::{CrateResponse, Summary};
 use log::debug;
 use ratatui::{
     layout::Flex,
     style::{Color, Modifier, Style},
+    text::Span,
     widgets::{Clear, List, ListItem, ListState, Paragraph},
 };
 use simplelog::{Config, LevelFilter, WriteLogger};
@@ -43,6 +44,7 @@ pub struct App {
     summary: Summary,
     current_section: SelectedSection,
     state: HashMap<SelectedSection, ListState>,
+    crates: HashMap<String, CrateResponse>,
     exit: bool,
     search: bool,
     info: bool,
@@ -69,6 +71,7 @@ impl App {
             current_section: SelectedSection::NewCrates,
             summary,
             state,
+            crates: HashMap::new(),
             exit: false,
             search: false,
             info: false,
@@ -76,10 +79,10 @@ impl App {
     }
 
     /// runs the application's main loop until the user quits
-    pub fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
+    pub async fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         while !self.exit {
             terminal.draw(|frame| self.draw(frame))?;
-            self.handle_events()?;
+            self.handle_events().await?;
             if self.exit && self.info {
                 self.info = false;
                 self.exit = false;
@@ -270,22 +273,22 @@ impl App {
     }
 
     /// updates the application's state based on user input
-    fn handle_events(&mut self) -> io::Result<()> {
+    async fn handle_events(&mut self) -> io::Result<()> {
         match event::read()? {
             // it's important to check that the event is a key press event as
             // crossterm also emits key release and repeat events on Windows.
             Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-                self.handle_key_event(key_event)
+                self.handle_key_event(key_event).await
             }
             _ => {}
         };
         Ok(())
     }
 
-    fn handle_key_event(&mut self, key_event: KeyEvent) {
+    async fn handle_key_event(&mut self, key_event: KeyEvent) {
         match key_event.code {
             KeyCode::Char('s') => self.search = true,
-            KeyCode::Char('i') => self.info = true,
+            KeyCode::Char('i') => self.show_info().await,
             KeyCode::Char('q') | KeyCode::Esc => self.exit(),
             KeyCode::Char('l') | KeyCode::Right | KeyCode::Tab => self.next_section(),
             KeyCode::Char('h') | KeyCode::Left | KeyCode::BackTab => self.previous_section(),
@@ -297,6 +300,59 @@ impl App {
 
     fn exit(&mut self) {
         self.exit = true;
+    }
+
+    async fn show_info(&mut self) {
+        // Only fetch for crate sections, not keywords/categories
+        if matches!(
+            self.current_section,
+            SelectedSection::NewCrates
+                | SelectedSection::MostDownloaded
+                | SelectedSection::JustUpdated
+                | SelectedSection::RecentDownloads
+        ) {
+            let list_state = self
+                .state
+                .get(&self.current_section)
+                .expect("sections always exist");
+            let selected_index = list_state.selected().unwrap_or(0);
+
+            // Get the crate name from summary
+            let crate_name = match self.current_section {
+                SelectedSection::NewCrates => {
+                    &self.summary.new_crates.get(selected_index).unwrap().name
+                }
+                SelectedSection::MostDownloaded => {
+                    &self
+                        .summary
+                        .most_downloaded
+                        .get(selected_index)
+                        .unwrap()
+                        .name
+                }
+                SelectedSection::JustUpdated => {
+                    &self.summary.just_updated.get(selected_index).unwrap().name
+                }
+                SelectedSection::RecentDownloads => {
+                    &self
+                        .summary
+                        .most_recently_downloaded
+                        .get(selected_index)
+                        .unwrap()
+                        .name
+                }
+                _ => unreachable!(),
+            };
+
+            // Fetch and cache if not already cached
+            if !self.crates.contains_key(crate_name)
+                && let Ok(crate_response) = self.client.fetch_crate_info(crate_name).await
+            {
+                self.crates.insert(crate_name.clone(), crate_response);
+            }
+        }
+
+        self.info = true;
     }
 
     fn select_next(&mut self) {
@@ -354,28 +410,73 @@ impl App {
             .get(&self.current_section)
             .expect("sections always exist");
         let selected_index = list_state.selected().unwrap_or(0);
-        let krate = match self.current_section {
-            SelectedSection::NewCrates => self.summary.new_crates.get(selected_index).unwrap(),
-            SelectedSection::MostDownloaded => {
-                self.summary.most_downloaded.get(selected_index).unwrap()
+        let lines = match self.current_section {
+            SelectedSection::NewCrates => {
+                let krate = self.summary.new_crates.get(selected_index).unwrap();
+                self.format_crate_info(&krate.name)
             }
-            SelectedSection::JustUpdated => self.summary.just_updated.get(selected_index).unwrap(),
-            SelectedSection::RecentDownloads => self
-                .summary
-                .most_recently_downloaded
-                .get(selected_index)
-                .unwrap(),
-            SelectedSection::PopularKeywords => todo!(),
-            SelectedSection::PopularCategories => todo!(),
+            SelectedSection::MostDownloaded => {
+                let krate = self.summary.most_downloaded.get(selected_index).unwrap();
+                self.format_crate_info(&krate.name)
+            }
+            SelectedSection::JustUpdated => {
+                let krate = self.summary.just_updated.get(selected_index).unwrap();
+                self.format_crate_info(&krate.name)
+            }
+            SelectedSection::RecentDownloads => {
+                let krate = self
+                    .summary
+                    .most_recently_downloaded
+                    .get(selected_index)
+                    .unwrap();
+                self.format_crate_info(&krate.name)
+            }
+            // SelectedSection::PopularKeywords => None,
+            // SelectedSection::PopularCategories => None,
+            _ => todo!("info for other sections not implemented yet"),
         };
 
-        let block = Block::bordered().title(krate.name.clone());
-        let paragraph = Paragraph::new(format!("{:?}", krate,))
+        let block = Block::bordered();
+        let paragraph = Paragraph::new(lines)
             .block(block)
             .wrap(ratatui::widgets::Wrap { trim: true });
         let area = App::popup_area(frame.area(), 60, 60);
-        frame.render_widget(Clear, area); //this clears out the background
+        frame.render_widget(Clear, area);
         frame.render_widget(paragraph, area);
+    }
+
+    fn format_crate_info(&self, crate_name: &str) -> Vec<Line<'static>> {
+        // Try to get full crate info from cache, fallback to empty if not available
+        if let Some(crate_response) = self.crates.get(crate_name) {
+            let krate = &crate_response.crate_data;
+            let desc = krate
+                .description
+                .clone()
+                .unwrap_or_else(|| "No description".into());
+            let tags = krate
+                .keywords
+                .as_ref()
+                .map(|keywords| {
+                    keywords
+                        .iter()
+                        .map(|k| format!("#{}", k))
+                        .collect::<Vec<String>>()
+                        .join("\t")
+                })
+                .unwrap_or_default();
+            let name = Span::from(krate.name.clone()).bold();
+            let version = Span::from(krate.max_version.clone());
+            vec![
+                Line::from(vec![name, Span::from("    "), version]),
+                Line::from(""),
+                Line::from(desc),
+                Line::from(""),
+                Line::from(tags.green()),
+            ]
+        } else {
+            // Fallback if crate info not yet loaded
+            vec![Line::from("Loading crate information...")]
+        }
     }
 
     /// helper function to create a centered rect using up certain percentage of the available rect `r`
@@ -400,7 +501,7 @@ async fn main() -> Result<()> {
     )
     .unwrap();
     let mut terminal = ratatui::init();
-    let app_result = App::new().await.run(&mut terminal);
+    let app_result = App::new().await.run(&mut terminal).await;
     ratatui::restore();
     app_result
 }
@@ -415,23 +516,23 @@ mod tests {
 
         assert_eq!(app.current_section, SelectedSection::NewCrates);
 
-        app.handle_key_event(KeyCode::Right.into());
+        app.handle_key_event(KeyCode::Right.into()).await;
         assert_eq!(app.current_section, SelectedSection::MostDownloaded);
 
-        app.handle_key_event(KeyCode::Right.into());
+        app.handle_key_event(KeyCode::Right.into()).await;
         assert_eq!(app.current_section, SelectedSection::JustUpdated);
 
-        app.handle_key_event(KeyCode::Left.into());
+        app.handle_key_event(KeyCode::Left.into()).await;
         assert_eq!(app.current_section, SelectedSection::MostDownloaded);
 
-        app.handle_key_event(KeyCode::Left.into());
+        app.handle_key_event(KeyCode::Left.into()).await;
         assert_eq!(app.current_section, SelectedSection::NewCrates);
 
-        app.handle_key_event(KeyCode::Left.into());
+        app.handle_key_event(KeyCode::Left.into()).await;
         assert_eq!(app.current_section, SelectedSection::PopularCategories);
 
         let mut app = App::new().await;
-        app.handle_key_event(KeyCode::Char('q').into());
+        app.handle_key_event(KeyCode::Char('q').into()).await;
         assert!(app.exit);
 
         Ok(())
