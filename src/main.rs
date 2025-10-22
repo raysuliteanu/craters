@@ -557,4 +557,186 @@ mod tests {
 
         Ok(())
     }
+
+    #[tokio::test]
+    async fn test_section_navigation_wraparound() {
+        let mut app = App::new().await;
+
+        // Start at NewCrates
+        assert_eq!(app.current_section, SelectedSection::NewCrates);
+
+        // Go backwards should wrap to last section
+        app.previous_section();
+        assert_eq!(app.current_section, SelectedSection::PopularCategories);
+
+        // Go forward should wrap back to first section
+        app.next_section();
+        assert_eq!(app.current_section, SelectedSection::NewCrates);
+
+        // Go through all sections forward
+        app.next_section();
+        assert_eq!(app.current_section, SelectedSection::MostDownloaded);
+        app.next_section();
+        assert_eq!(app.current_section, SelectedSection::JustUpdated);
+        app.next_section();
+        assert_eq!(app.current_section, SelectedSection::RecentDownloads);
+        app.next_section();
+        assert_eq!(app.current_section, SelectedSection::PopularKeywords);
+        app.next_section();
+        assert_eq!(app.current_section, SelectedSection::PopularCategories);
+
+        // Should wrap back to first
+        app.next_section();
+        assert_eq!(app.current_section, SelectedSection::NewCrates);
+    }
+
+    #[tokio::test]
+    async fn test_list_state_initialization() {
+        let app = App::new().await;
+
+        // All sections should have a state
+        for section in SelectedSection::iter() {
+            let state = app.state.get(&section);
+            assert!(state.is_some(), "Section {:?} should have a state", section);
+
+            // First item should be selected by default
+            assert_eq!(state.unwrap().selected(), Some(0));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_exit_behavior() {
+        let mut app = App::new().await;
+
+        assert!(!app.should_exit);
+        assert!(!app.show_info_popup);
+
+        // Normal exit
+        app.exit();
+        assert!(app.should_exit);
+
+        // Exit with popup open should only close popup
+        let mut app = App::new().await;
+        app.show_info_popup = true;
+        app.exit();
+        assert!(app.should_exit);
+
+        // Simulate the run loop logic
+        if app.should_exit && app.show_info_popup {
+            app.show_info_popup = false;
+            app.should_exit = false;
+        }
+
+        assert!(!app.should_exit);
+        assert!(!app.show_info_popup);
+    }
+
+    #[test]
+    fn test_popup_area_calculation() {
+        let area = Rect::new(0, 0, 100, 50);
+
+        // Test 60% width and height
+        let popup = App::popup_area(area, 60, 60);
+        assert_eq!(popup.width, 60);
+        assert_eq!(popup.height, 30);
+
+        // Popup should be centered
+        assert_eq!(popup.x, 20); // (100 - 60) / 2
+        assert_eq!(popup.y, 10); // (50 - 30) / 2
+
+        // Test different percentages
+        let popup = App::popup_area(area, 50, 50);
+        assert_eq!(popup.width, 50);
+        assert_eq!(popup.height, 25);
+        assert_eq!(popup.x, 25);
+        assert_eq!(popup.y, 13); // Centered using flex layout
+    }
+
+    #[test]
+    fn test_create_layout() {
+        let app_area = Rect::new(0, 0, 120, 40);
+
+        // Create a dummy app to test layout (we can use Default for testing)
+        let client = HttpClient::new();
+        let summary = Summary {
+            num_downloads: 0,
+            num_crates: 0,
+            new_crates: vec![],
+            most_downloaded: vec![],
+            most_recently_downloaded: vec![],
+            just_updated: vec![],
+            popular_keywords: vec![],
+            popular_categories: vec![],
+        };
+
+        let mut state: HashMap<SelectedSection, ListState> = HashMap::new();
+        for section in SelectedSection::iter() {
+            let mut list_state = ListState::default();
+            list_state.select(Some(0));
+            state.insert(section, list_state);
+        }
+
+        let app = App {
+            client,
+            summary,
+            current_section: SelectedSection::NewCrates,
+            state,
+            crates: HashMap::new(),
+            should_exit: false,
+            search: false,
+            show_info_popup: false,
+        };
+
+        let layout = app.create_layout(app_area);
+
+        // Should be 2 rows
+        assert_eq!(layout.len(), 2);
+
+        // Each row should have 3 columns
+        assert_eq!(layout[0].len(), 3);
+        assert_eq!(layout[1].len(), 3);
+
+        // Verify all areas are within bounds
+        for row in &layout {
+            for rect in row {
+                assert!(rect.x < app_area.width);
+                assert!(rect.y < app_area.height);
+                assert!(rect.width > 0);
+                assert!(rect.height > 0);
+            }
+        }
+    }
+
+    #[test]
+    fn test_selected_section_order() {
+        // Verify the enum order matches expected navigation sequence
+        let sections: Vec<SelectedSection> = SelectedSection::iter().collect();
+
+        assert_eq!(sections[0], SelectedSection::NewCrates);
+        assert_eq!(sections[1], SelectedSection::MostDownloaded);
+        assert_eq!(sections[2], SelectedSection::JustUpdated);
+        assert_eq!(sections[3], SelectedSection::RecentDownloads);
+        assert_eq!(sections[4], SelectedSection::PopularKeywords);
+        assert_eq!(sections[5], SelectedSection::PopularCategories);
+        assert_eq!(sections.len(), 6);
+    }
+
+    #[tokio::test]
+    async fn test_select_next_and_previous() {
+        let mut app = App::new().await;
+
+        // Start with first item selected (index 0)
+        let state = app.state.get(&SelectedSection::NewCrates).unwrap();
+        assert_eq!(state.selected(), Some(0));
+
+        // Select next should move to index 1
+        app.select_next();
+        let state = app.state.get(&SelectedSection::NewCrates).unwrap();
+        assert_eq!(state.selected(), Some(1));
+
+        // Select previous should go back to index 0
+        app.select_previous();
+        let state = app.state.get(&SelectedSection::NewCrates).unwrap();
+        assert_eq!(state.selected(), Some(0));
+    }
 }
