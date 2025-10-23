@@ -95,7 +95,10 @@ mod tests {
 
         // Should return some results (not necessarily specific to the keyword)
         // The search_keywords method currently does a text search, not a keyword filter
-        assert!(!search_results.is_empty(), "Should return some search results");
+        assert!(
+            !search_results.is_empty(),
+            "Should return some search results"
+        );
     }
 
     #[tokio::test]
@@ -107,10 +110,22 @@ mod tests {
         assert!(summary.num_crates > 0, "Should have crates in the registry");
         assert!(summary.num_downloads > 0, "Should have downloads");
         assert!(!summary.new_crates.is_empty(), "Should have new crates");
-        assert!(!summary.most_downloaded.is_empty(), "Should have most downloaded crates");
-        assert!(!summary.just_updated.is_empty(), "Should have recently updated crates");
-        assert!(!summary.popular_keywords.is_empty(), "Should have popular keywords");
-        assert!(!summary.popular_categories.is_empty(), "Should have popular categories");
+        assert!(
+            !summary.most_downloaded.is_empty(),
+            "Should have most downloaded crates"
+        );
+        assert!(
+            !summary.just_updated.is_empty(),
+            "Should have recently updated crates"
+        );
+        assert!(
+            !summary.popular_keywords.is_empty(),
+            "Should have popular keywords"
+        );
+        assert!(
+            !summary.popular_categories.is_empty(),
+            "Should have popular categories"
+        );
     }
 
     #[tokio::test]
@@ -120,9 +135,18 @@ mod tests {
 
         // Verify detailed crate information
         assert_eq!(crate_info.crate_data.name, "tokio");
-        assert!(crate_info.crate_data.description.is_some(), "Tokio should have a description");
-        assert!(crate_info.crate_data.downloads > 0, "Tokio should have downloads");
-        assert!(!crate_info.crate_data.max_version.is_empty(), "Should have a version");
+        assert!(
+            crate_info.crate_data.description.is_some(),
+            "Tokio should have a description"
+        );
+        assert!(
+            crate_info.crate_data.downloads > 0,
+            "Tokio should have downloads"
+        );
+        assert!(
+            !crate_info.crate_data.max_version.is_empty(),
+            "Should have a version"
+        );
     }
 
     #[tokio::test]
@@ -156,6 +180,9 @@ mod tests {
 
         // Do a simple operation to verify the client works
         let summary = client.fetch_summary().await;
-        assert!(summary.is_ok(), "Client should be functional after creation");
+        assert!(
+            summary.is_ok(),
+            "Client should be functional after creation"
+        );
     }
 }
