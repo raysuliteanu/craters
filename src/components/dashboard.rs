@@ -1,4 +1,5 @@
 use color_eyre::Result;
+use crossterm::event::KeyCode;
 use ratatui::{prelude::*, widgets::*};
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -6,18 +7,28 @@ use super::Component;
 use crate::{action::Action, config::Config};
 
 #[derive(Default)]
-pub struct Home {
+pub struct Dashboard {
     command_tx: Option<UnboundedSender<Action>>,
     config: Config,
 }
 
-impl Home {
+impl Dashboard {
     pub fn new() -> Self {
         Self::default()
     }
 }
 
-impl Component for Home {
+impl Component for Dashboard {
+    fn handle_key_event(&mut self, key: crossterm::event::KeyEvent) -> Result<Option<Action>> {
+        let action = match key.code {
+            KeyCode::Char('q') | KeyCode::Esc => Some(Action::Quit),
+            KeyCode::Char('i') => Some(Action::ShowInfo),
+            KeyCode::Char('h') => Some(Action::Help),
+            _ => None,
+        };
+
+        Ok(action)
+    }
     fn register_action_handler(&mut self, tx: UnboundedSender<Action>) -> Result<()> {
         self.command_tx = Some(tx);
         Ok(())

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     action::Action,
-    components::{Component, fps::FpsCounter, home::Home},
+    components::{Component, dashboard::Dashboard},
     config::Config,
     crates_io_client::HttpClient,
     tui::{Event, Tui},
@@ -22,7 +22,7 @@ use ratatui::{
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, FromRepr, IntoEnumIterator};
 use tokio::sync::mpsc;
-use tracing::{debug, info};
+use tracing::{debug, trace};
 
 const LIST_ITEM_SELECTED_STYLE: Style = Style::new().add_modifier(Modifier::BOLD).fg(Color::Cyan);
 const COLOR_BLACK: Color = Color::Rgb(0, 0, 0);
@@ -48,8 +48,21 @@ pub struct App {
 }
 
 // NOTE: order matters in this list for proper next/previous navigation
-#[derive(Default, Debug, Copy, Clone, Display, FromRepr, EnumIter, PartialEq, Eq, Hash)]
-enum SelectedSection {
+#[derive(
+    Default,
+    Debug,
+    Copy,
+    Clone,
+    Display,
+    FromRepr,
+    EnumIter,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+)]
+pub(crate) enum SelectedSection {
     #[default]
     NewCrates,
     MostDownloaded,
@@ -63,6 +76,8 @@ enum SelectedSection {
 pub enum Mode {
     #[default]
     Home,
+    Search,
+    Info,
 }
 
 impl App {
@@ -82,7 +97,7 @@ impl App {
         Ok(Self {
             tick_rate,
             frame_rate,
-            components: vec![Box::new(Home::new()), Box::new(FpsCounter::default())],
+            components: vec![Box::new(Dashboard::new())],
             should_quit: false,
             should_suspend: false,
             config: Config::new()?,
@@ -110,9 +125,11 @@ impl App {
         for component in self.components.iter_mut() {
             component.register_action_handler(self.action_tx.clone())?;
         }
+
         for component in self.components.iter_mut() {
             component.register_config_handler(self.config.clone())?;
         }
+
         for component in self.components.iter_mut() {
             component.init(tui.size()?)?;
         }
@@ -164,7 +181,7 @@ impl App {
         };
         match keymap.get(&vec![key]) {
             Some(action) => {
-                info!("Got action: {action:?}");
+                trace!("Got action: {action:?}");
                 action_tx.send(action.clone())?;
             }
             _ => {
@@ -174,7 +191,7 @@ impl App {
 
                 // Check for multi-key combinations
                 if let Some(action) = keymap.get(&self.last_tick_key_events) {
-                    info!("Got action: {action:?}");
+                    trace!("Got action: {action:?}");
                     action_tx.send(action.clone())?;
                 }
             }

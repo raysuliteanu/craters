@@ -1,5 +1,5 @@
 use color_eyre::Result;
-use crossterm::event::{KeyEvent, MouseEvent};
+use crossterm::event::{KeyCode, KeyEvent, MouseEvent};
 use ratatui::{
     Frame,
     layout::{Rect, Size},
@@ -8,8 +8,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{action::Action, config::Config, tui::Event};
 
-pub mod fps;
-pub mod home;
+pub mod dashboard;
 
 /// `Component` is a trait that represents a visual and interactive element of the user interface.
 ///
