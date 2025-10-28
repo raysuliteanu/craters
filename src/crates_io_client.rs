@@ -6,7 +6,6 @@ pub struct HttpClient {
     client: AsyncClient,
 }
 
-#[allow(dead_code)]
 impl HttpClient {
     pub fn new() -> Self {
         Self {

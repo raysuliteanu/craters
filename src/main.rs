@@ -16,7 +16,9 @@ async fn main() -> Result<()> {
     crate::errors::init()?;
     crate::logging::init()?;
 
-    let mut app = App::new(0.0, 0.0).await?;
+    // 4 and 60 values come from the ratatui template, originally from the
+    // CLI module which I didn't include
+    let mut app = App::new(4.0, 60.0).await?;
     app.run().await?;
     Ok(())
 }
